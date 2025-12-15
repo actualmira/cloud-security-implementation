@@ -1,0 +1,50 @@
+<group name="aws,">
+  <!-- Rule 100010: Detect Security Group Modifications -->
+  <rule id="100010" level="10" overwrite="yes">
+    <if_sid>80202</if_sid>
+    <field name="aws.eventName">AuthorizeSecurityGroupIngress|AuthorizeSecurityGroupEgress|RevokeSecurityGroupIngress|RevokeSecurityGroupEgress<>
+    <description>AWS Security Group was modified</description>
+    <mitre>
+      <id>T1562.007</id>
+    </mitre>
+  </rule>
+
+  <!-- Rule 100012: Failed AWS Console Login -->
+  <rule id="100012" level="8" overwrite="yes">
+    <if_sid>80202</if_sid>
+    <field name="aws.eventName">^ConsoleLogin$</field>
+    <field name="aws.responseElements.ConsoleLogin">^Failure$</field>
+    <description>AWS Console login failed</description>
+    <mitre>
+      <id>T1078</id>
+    </mitre>
+  </rule>
+  <!-- Rule 100013: Multiple Failed Logins -->
+  <rule id="100013" level="10" frequency="3" timeframe="300">
+    <if_matched_sid>100012</if_matched_sid>
+    <description>Multiple AWS Console login failures detected (Possible brute force)</description>
+    <mitre>
+      <id>T1110</id>
+    </mitre>
+  </rule>
+
+  <!-- Rule 100014: Root Account Usage -->
+  <rule id="100014" level="12">
+    <if_sid>80202</if_sid>
+    <field name="aws.userIdentity.type">^Root$</field>
+    <description>AWS Root account was used</description>
+    <mitre>
+      <id>T1078.004</id>
+    </mitre>
+  </rule>
+   <!-- Rule 100015: S3 Bucket Made Public -->
+  <rule id="100015" level="12" overwrite="yes">
+    <if_sid>80202</if_sid>
+    <field name="aws.eventName">PutBucketAcl|PutBucketPolicy</field>
+    <match>AllUsers|AuthenticatedUsers</match>
+    <description>S3 Bucket permissions changed to public</description>
+    <mitre>
+      <id>T1530</id>
+    </mitre>
+  </rule>
+</group>
