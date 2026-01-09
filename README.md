@@ -3,7 +3,7 @@
 **A comprehensive cloud security project demonstrating detection, prevention, and response capabilities in AWS through network segmentation, identity and access management, centralized monitoring and automated response.**
 
 ---
-## Table of Contents
+## Table of Content
 
 - [Project Overview](#project-overview)
 - [Why This Project Matters](#why-this-project-matters)
@@ -19,8 +19,8 @@
   - [2.2 Wazuh Manager Deployment](#22-wazuh-manager-deployment)
   - [2.3 File Integrity Monitoring (FIM)](#23-file-integrity-monitoring-fim)
   - [2.4 AWS Logs Integration](#24-aws-logs-integration-cloudtrail--vpc-flow-logs)
-  - [2.5 Operational Security: Disk Space & Log Integrity](#25-operational-security-disk-space--log-integrity)
-  - [2.6 Custom Detection Rules](#26-custom-detection-rules)
+  - [2.5 Custom Detection Rules](#25-custom-detection-rules)
+  - [2.6 Operational Security: Disk Space & Log Integrity](#26-operational-security-disk-space--log-integrity)
   - [2.7 Detection Timelines](#27-detection-timelines)
   - [Production Recommendations](#production-recommendations)
 - [Phase 3: Automated Response & CSPM](#phase-3-automated-response--cspm)
