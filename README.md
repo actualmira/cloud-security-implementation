@@ -402,7 +402,10 @@ CloudTrail writes logs to S3 bucket `zerotrust123` which provides centralized lo
 
 **Bucket Policy - Least Privilege:**
 
-Only the CloudTrail service can write to this bucket. **CloudTrail Bucket Policy:** See `config/phase1/s3-bucket-policy-cloudtrail.json` . The policy includes
+Only the CloudTrail service can write to this bucket. 
+See [`config/phase1/s3-bucket-policy-cloudtrail.json`](config/phase1/s3-bucket-policy-cloudtrail.json) 
+
+The policy includes:
 
 1. **GetBucketAcl**: Allows CloudTrail to check bucket ACL before writing
 2. **PutObject**: Allows CloudTrail to write logs only to the `AWSLogs/{AccountID}/*` path
@@ -569,14 +572,14 @@ This demonstrates FIM detecting both configuration file modifications (SSH, ngin
 ![Security Events Dashboard](screenshots/phase2/security-events-dashboard1.png)
 
 **Metrics:**
-- **480 total events**
-- **111 successful authentications** (SSH sessions via Session Manager)
+- **442 total events**
+- **101 successful authentications** (SSH sessions via Session Manager)
 - **0 authentication failures** (no brute-force attempts detected)
 - **0 critical alerts (Level 12+)**
 
 **Host-based monitoring working:**
 
-The 480 events prove the agent is successfully forwarding logs from the web server to the Wazuh Manager for analysis.
+The 442 events breakdown prove the agent is successfully forwarding logs from the web server to the Wazuh Manager for analysis.
 
 ---
 
@@ -677,7 +680,7 @@ Mapping rules to MITRE techniques provides:
 sudo nano  /var/ossec/etc/rules/local_rules.xml
 ```
 
-**Wazuh Custom Rules:** See `config/phase2/wazuh-custom-rules.xml`
+**Wazuh Custom Rules:** [`config/phase2/wazuh-custom-rules.xml`](config/phase2/wazuh-custom-rules.xml)
 
 ```xml
 <group name="aws,">
@@ -916,24 +919,32 @@ Without the decoder, Wazuh sees the log but can't extract the source IP. The `<s
 
 ---
 
-**Step 1: Created custom Detection Rules**  **SOAR Custom Rules:** See `config/phase3/wazuh-soar-rules.xml`
+**Step 1: Created custom Detection Rules**  
+
+**SOAR Custom Rules:** [`config/phase3/wazuh-soar-rules.xml`](config/phase3/wazuh-soar-rules.xml)
 
 ```xml
-<!-- Rule 100050: Failed AWS Console Login -->
-<rule id="100050" level="8" overwrite="yes">
-  <if_sid>2501</if_sid>
-  <field name="program">wazuh-dashboard</field>
-  <description>Failed authentication attempt to Wazuh Dashboard</description>
-</rule>
+<group name="authentication,wazuh,">
+  <!-- Rule 100050: Failed Wazuh Dashboard Login -->
+  <rule id="100050" level="7">
+    <if_sid>2501</if_sid>
+    <program_name>wazuh-dashboard</program_name>
+    <description>Failed authentication attempt to Wazuh Dashboard</description>
+    <group>authentication_failed,pci_dss_10.2.4,pci_dss_10.2.5,</group>
+  </rule>
 
-<!-- Rule 100051: Multiple Failed Logins (Brute Force Correlation) -->
-<rule id="100051" level="10" frequency="3" timeframe="300">
-  <if_matched_sid>100050</if_matched_sid>
-  <description>Multiple failed authentication attempts to Wazuh Dashboard - Possible brute force</description>
-  <mitre>
-    <id>T1110.001</id>
-  </mitre>
-</rule>
+  <!-- Rule 100051: Multiple Failed Wazuh Dashboard Logins (Brute Force) -->
+  <rule id="100051" level="10" frequency="3" timeframe="120">
+    <if_matched_sid>100050</if_matched_sid>
+    <same_source_ip />
+    <description>Multiple failed authentication attempts to Wazuh Dashboard - Possible brute force attack</description>
+    <mitre>
+      <id>T1110.001</id>
+    </mitre>
+    <group>authentication_failures,pci_dss_10.2.4,pci_dss_10.2.5,</group>
+  </rule>
+
+</group>
 ```
 
 **Why depend on rule 2501?**
@@ -985,7 +996,9 @@ The `<command>` section defines what to execute: firewall-block.sh from the acti
 
 This ensures attacking IPs are blocked at the source (the manager's iptables firewall) within seconds of the brute force correlation.
 
-**Step 3: Created firewall-block.sh Script** **Firewall Blocking Script:** See `scripts/phase3/firewall-block.sh`
+**Step 3: Created firewall-block.sh Script** 
+
+**Firewall Blocking Script:** [`scripts/phase3/firewall-block.sh`](scripts/phase3/firewall-block.sh)
 
 ```bash
 sudo nano /var/ossec/active-response/bin/firewall-block.sh
@@ -1165,7 +1178,7 @@ This timeline demonstrates how automated detection and response dramatically red
 
 - Custom decoder correctly parsed authentication failures and extracted source IP  
 - Rule chaining: Rule 100050 → Rule 100051 correlation worked  
-- Frequency detection: 3 attempts in 180 seconds triggered correctly  
+- Frequency detection: 3 attempts in 120 seconds triggered correctly  
 - Active response integration: wazuh-execd called script automatically  
 - Script execution: Bash script parsed JSON and executed iptables  
 - IP blocking: Firewall rule added successfully  
@@ -1221,19 +1234,27 @@ If account separation isn't possible, bucket-level BPA with tagging allows selec
 
 **Step 2:** I created a Lambda function that automatically re-enables Block Public Access when Config detects it's been disabled.
 
-**Lambda Remediation Function:** See `scripts/phase3.2/lambda_function.py`
+**Lambda Remediation Function:** [`scripts/phase3.2/lambda_function.py`](scripts/phase3.2/lambda_function.py)
 
 ```python
 import json
 import boto3
 
 def lambda_handler(event, context):
+    print("Event received:", json.dumps(event))
+    
+    # Initialize S3 control client for account-level operations
     s3control = boto3.client('s3control')
+    
+    # Get account ID
     sts = boto3.client('sts')
     account_id = sts.get_caller_identity()['Account']
     
     try:
-        s3control.put_public_access_block(
+        print(f"Enabling account-level Block Public Access for account: {account_id}")
+        
+        # Enable all 4 Block Public Access settings at account level
+        response = s3control.put_public_access_block(
             AccountId=account_id,
             PublicAccessBlockConfiguration={
                 'BlockPublicAcls': True,
@@ -1242,13 +1263,18 @@ def lambda_handler(event, context):
                 'RestrictPublicBuckets': True
             }
         )
-        print(f"Successfully enabled Block Public Access for account {account_id}")
-        return {'statusCode': 200, 'body': 'BPA enabled'}
-    
+        
+        print(f"Successfully enabled account-level Block Public Access")
+        
+        return {
+            'statusCode': 200,
+            'body': json.dumps(f'Account-level Block Public Access enabled for account {account_id}')
+        }
+        
     except Exception as e:
-        print(f"Error: {str(e)}")
+        print(f"Error enabling Block Public Access: {str(e)}")
         raise e
-```
+```        
 
 **Key implementation details:**
 - Uses `s3control` client for account-level operations (not bucket-level `s3` client)
@@ -1260,7 +1286,7 @@ def lambda_handler(event, context):
 
 **Step 3:** I Created a custom policy for the Lambda execution role and granted the minimum permissions needed.
 
-![Custom IAM Policy file here)
+![Lambda IAM Policy](screenshots/phase3.2/lambda_iam_policy.png)
 
 ```json
 {
@@ -1339,10 +1365,9 @@ I tested the CSPM automation by disabling S3 Block Public Access and measuring d
 
 **Timeline:**
 ```
-11:41:06 - I disabled BPA
-11:41:29 - Config detected NON_COMPLIANT
-11:41:33 - EventBridge triggered Lambda
-11:41:35 - Lambda completed (2.6 seconds execution time)
+11:41:06- I disabled BPA 
+11:41:32 - EventBridge triggered Lambda
+11:41:35 - Lambda completed (~3 seconds execution time)
 ```
 
 **Total response time:** ~29 seconds from misconfiguration to fix.
