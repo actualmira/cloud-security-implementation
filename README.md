@@ -49,6 +49,7 @@ This project demonstrates how I designed and implementated a comprehensive, mult
 - Integrated CloudTrail logs and VPC Flow Logs 
 - Created 5 custom detection rules mapped to MITRE ATT&CK framework
 - Tested rules against real attack scenarios: security group changes, root account usage, brute force attempts
+- Identified and resolved infrastructure resilience issues
 
 **Phase 3 - Automated Incident Response:**
 - Built **SOAR** automation: detected brute force attempts automatically block attacker IPs via iptables in seconds
@@ -423,7 +424,8 @@ This multi-layer approach ensures that if credentials are compromised, attackers
 - **Incident investigation**: Complete audit trail showing who did what, when, from where, and with what result
 - **Compliance reporting**: Demonstrates continuous monitoring and evidence of security controls for PCI DSS audit logging requirements
 
-CloudTrail logs reach Wazuh with 15-20 minute latency (S3 delivery + polling), suitable for investigation and compliance but not for immediate threat response. Real-time detection comes from host-based logs.
+CloudTrail logs reach Wazuh with 15-30 minute latency (S3 delivery + polling), suitable for investigation and compliance but not for immediate threat response. Real-time detection comes from host-based logs.
+
 ---
 
 ### 1.5 VPC Flow Logs
@@ -451,12 +453,12 @@ This is useful for detecting port scanning, identifying data exfiltration, troub
 
 I configured VPC Flow Logs to write to CloudWatch Logs instead of S3 to prioritize **detection speed** for this demonstration and to show understading of both S3 (CloudTrail) and CloudWatch (Flow Logs) integration methods
 
-VPC Flow Logs provide near real-time network visibility with ~10-15 minute latency (logs are aggregated every ~10 minutes before being written to CloudWatch). This is slower than host-based logs (~30 seconds) but faster than CloudTrail (~15-20 minutes), making VPC Flow Logs suitable for detecting lateral movement and data exfiltration patterns. 
+VPC Flow Logs provide near real-time network visibility with ~10-15 minute latency (logs are aggregated every ~10 minutes before being written to CloudWatch). This is slower than host-based logs (~30 seconds) but faster than CloudTrail (~15-30 minutes), making VPC Flow Logs suitable for detecting lateral movement and data exfiltration patterns. 
 
 Together, they provide layered visibility:
 - Host logs: Immediate detection (seconds)
 - VPC Flow Logs: Network detection (10-15 min)
-- CloudTrail: API audit trail (15-20 min)
+- CloudTrail: API audit trail (15-30 min)
 
 **Production Considerations:**
 
@@ -790,7 +792,7 @@ This shows Wazuh dashboard detecting the custom rules triggering.
 ### 2.6 Operational Security: Disk Space & Log Integrity
 
 **Challenge Encountered:**
-During SIEM implementation, Wazuh indexer (OpenSearch) encountered disk saturation at 97% capacity, causing the dashboard to become inaccessible with API errors.
+During SIEM implementation, Wazuh indexer (OpenSearch) encountered disk saturation at 95% capacity, causing the dashboard to become inaccessible with API errors.
 
 ![Wazuh API Connection Error](screenshots/phase2/wazuh-api-connection-error.png)
 
@@ -1065,7 +1067,7 @@ sudo chown root:wazuh /var/ossec/active-response/bin/firewall-block.sh
 sudo apt update && sudo apt install -y jq
 ```
 
-**Restarted Wazuh to apply configuration:**
+**Restarted Wazuh to apply configuration**
 
 
 #### Testing the SOAR Automation
@@ -1077,11 +1079,6 @@ sudo apt update && sudo apt install -y jq
 **Challenge encountered:**
 
 ![Dashboard Authentication Failures](screenshots/phase3/dashboard-authentication-failures.png)
-```
-[2025-10-23T09:50:00] [WARN] [o.o.s.a.BackendRegistry] [node-1] Authentication finally failed for admin from 127.0.0.1:60876
-[2025-10-23T09:50:04] [WARN] [o.o.s.a.BackendRegistry] [node-1] Authentication finally failed for admin from 127.0.0.1:60876
-[2025-10-23T09:50:07] [WARN] [o.o.s.a.BackendRegistry] [node-1] Authentication finally failed for admin from 127.0.0.1:60876
-```
 
 **Why this happened:**
 
@@ -1196,7 +1193,7 @@ This timeline demonstrates how automated detection and response dramatically red
 A developer accidentally disables S3 Block Public Access while troubleshooting or worse, an attacker with compromised credentials intentionally exposes buckets to exfiltrate data. Either way, sensitive information is now accessible to anyone on the internet.
 
 
-**Industry standard:** NSA/CISA guidelines recommend "continuous monitoring and automated remediation" for cloud security. Manual compliance processes are too slow. If a misconfiguration exists for hours before discovery, it gives attackers time to exploit it. Automated enforcement closes that window from minutes or hours to seconds.
+**Industry standard:** NSA/CISA guidelines recommend continuous monitoring and automated remediation for cloud security. Manual compliance processes are too slow. If a misconfiguration exists for hours before discovery, it gives attackers time to exploit it. Automated enforcement closes that window from minutes or hours to seconds.
 
 #### My Solution: AWS Config + Lambda Automation
 
@@ -1362,13 +1359,6 @@ I tested the CSPM automation by disabling S3 Block Public Access and measuring d
 **EventBridge caught the compliance change and automatically triggered Lambda to remediate**
 
 ![Lambda Execution Logs](screenshots/phase3.2/lambda-execution-logs.png)
-
-**Timeline:**
-```
-11:41:06- I disabled BPA 
-11:41:32 - EventBridge triggered Lambda
-11:41:35 - Lambda completed (~3 seconds execution time)
-```
 
 **Total response time:** ~29 seconds from misconfiguration to fix.
 
