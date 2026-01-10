@@ -540,7 +540,6 @@ For this demo monitoring one web server, it is an acceptable trade-off
 
 I deployed Wazuh Manager on t3.large EC2 instance (10.0.8.30/20), installed Wazuh agent on web server and accessed the dashboard which has a security group restriction to allow access only from authorized IP(my ip). It showed agent connected, active and receiving real-time security events.
 
-![Wazuh Agent Dashboard Connected](screenshots/phase2/wazuh-agent-dashboard-connected.png)
 
 ### 2.3 File Integrity Monitoring (FIM)
 
